@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 
 
-static int pipes;
+static int isPipes = 0;
 
 char **get_input(char *input) {
     char **command = malloc(8 * sizeof(char *));
@@ -33,11 +33,16 @@ char **test_get_input(char *input) {
 
     parsed = strtok(input, separator);
 
-    while (parsed != NULL && strncmp("|", input)!=0) { // Try to figure out strncmp (string compaire)
+    while (parsed != NULL && strncmp(parsed, "|", 1)!=0) { // Try to figure out strncmp (string compaire)
         command[index] = parsed;
         index++;
         parsed = strtok(NULL, separator);
     }
+    if (strncmp(parsed, "|", 1) == 0)
+        isPipes = 1;
+    else
+        isPipes = 0;
+
     command[index] = NULL;
     return command;
 }
@@ -49,6 +54,8 @@ int main() {
     //char strinput;
     pid_t child_pid;
     int stat_loc;
+    int p[2];
+    pipe(p);
 
     while(1){
         input = readline("[QUASH]$ ");
@@ -57,18 +64,6 @@ int main() {
         command = test_get_input(input);
         
         // EX. command = ["ls", "|", "grep", "src"]
-
-        for (int i=0; i < sizeof(command); i++)
-        {
-            printf(command[i]);
-            printf("\n");
-        }
-
-        if (pipes != 0)
-        // Try and split the commands
-        {
-
-        }
 
         pid_t child_pid = fork();
         if (child_pid == 0) {
