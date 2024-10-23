@@ -172,6 +172,8 @@ int main()
         if (strncmp(tokens[0], "exit", 4)==0 || strncmp(tokens[0], "quit", 4)==0)
             break;
 
+        
+        
         // Built in commands
         if (tokens[0] != NULL && strcmp(tokens[0], "cd") == 0) // See if the command is to cd
         {
@@ -183,9 +185,9 @@ int main()
                     perror("cd");
                 }
             }
+            continue;
         }
-
-        if (strncmp(tokens[0], "echo", 4)==0)
+        else if (strncmp(tokens[0], "echo", 4)==0)
         {
             for (int i=1; i<token_count; i++)
             {
@@ -201,6 +203,19 @@ int main()
                 }
             }
             continue;
+        }
+        else if (strncmp(tokens[0], "pwd", 3) == 0)
+        {
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)) != NULL)
+            {
+                printf("%s\n", cwd);
+            }
+            else
+            {
+                perror("couldn't get cwd");
+            }
+            
         }
 
 
@@ -255,7 +270,8 @@ int main()
                     perror("Fork failed");
                     exit(EXIT_FAILURE);
                 }
-                else if (pid == 0) // When the fork is sucessful
+                
+                else if (pid >= 0) // When the fork is sucessful
                 {
                     if (i > 0) // Not the child process
                     {
@@ -283,15 +299,15 @@ int main()
                         {
                             fd_out = open(output_file, O_WRONLY | O_CREAT |O_TRUNC, 0644);
                         }
-                        if (fd_out < 0)
+                        if (fd_out < 0) // Hello    
                         {
                             perror("open output_file");
                             exit(EXIT_FAILURE);
                         }
                         dup2(fd_out, STDOUT_FILENO);
                         close(fd_out);
-                    }   
-                    execvp(tokens[0], &tokens[0]);
+                    }
+                    execvp(tokens[0], tokens);
                     perror("quash");
                     exit(EXIT_FAILURE);
                     command_index++;
@@ -321,6 +337,58 @@ int main()
             for (int i = 0; i<=pipe_count; i++)
             {
                 wait(NULL);
+            }
+        }
+        else
+        {
+            // No pipe
+            // Fork a child process
+            pid_t pid = fork();
+            if (pid == 0) {
+                // Child process
+
+                // Handle input redirection
+                if (input_file != NULL) {
+                    int fd_in = open(input_file, O_RDONLY);
+                    if (fd_in < 0) {
+                        perror("open input_file");
+                        exit(EXIT_FAILURE);
+                    }
+                    dup2(fd_in, STDIN_FILENO);
+                    close(fd_in);
+                }
+
+                // Handle output redirection
+                if (output_file != NULL) {
+                    int fd_out;
+                    if (append_output) {
+                        fd_out = open(output_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    } else {
+                        fd_out = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    }
+                    if (fd_out < 0) {
+                        perror("open output_file");
+                        exit(EXIT_FAILURE);
+                    }
+                    dup2(fd_out, STDOUT_FILENO);
+                    close(fd_out);
+                }
+
+                execvp(tokens[0], tokens);
+                perror("quash");
+                exit(EXIT_FAILURE);
+            } else if (pid < 0) {
+                perror("fork failed");
+            } else {
+                if (!background) {
+                    // Foreground execution
+                    int status;
+                    waitpid(pid, &status, 0);
+                } else {
+                    // Background execution
+                    add_job(pid, input);
+                    printf("Background job started: [%d] %d %s &\n", jobs[job_count - 1].job_id, pid, input);
+                }
             }
         }
     }
