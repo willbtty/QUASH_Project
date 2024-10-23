@@ -5,56 +5,17 @@
 #include <readline/readline.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-
+#include <IO.h>
 
 static int isPipes = 0;
 static int IOredirect = -1;
 
 
-void check_for_IO_redirect(const char *input) {
-    if (strncmp(input, "<", 1) == 0) {
-        // Check to see if the user is trying to put input into a file
-        IOredirect = 1;
-    }
-    else if (strncmp(input, ">", 1) == 0) {
-        IOredirect = 0;
-    }
-    else if (strncmp(input, ">>", 1) == 0) {
-        IOredirect = 2;
-    }
-}
 
-void redirect_IO(const char* input, int fd) {
 
-    if (IOredirect == 1) { // Change stdout to the file
-        dup2(fd, STDOUT_FILENO);
-    }
-    else if (IOredirect == 0) { // Change stin to the file
-        dup2(fd, STDIN_FILENO);
-    }
-    // Need to figure out how to deal with >>
-}
-
-/* Old get input function
-char **get_input(char *input) {
-    char **command = malloc(8 * sizeof(char *));
-    char *separator = " ";
-    char *parsed;
-    int index = 0;
-
-    parsed = strtok(input, separator);
-    while (parsed != NULL) {
-        command[index] = parsed;
-        index++;
-        parsed = strtok(NULL, separator);
-    }
-    command[index] = NULL;
-    return command;
-}
-*/
 
 char **test_get_input(char *input) {
-    char **command = malloc(8 * sizeof(char *));
+    char **command = malloc(100 * sizeof(char *));
     char *separator = " ";
     char *parsed;
     int index = 0;
@@ -123,7 +84,7 @@ int main() {
             pid_t child_pid = fork();
             if (child_pid == 0) {
                 execvp(command[0], command);
-                printf("Command not found %s \n", command[0]);
+                fprintf(stderr, "Command not found %s \n", command[0]);
             } else {
                 waitpid(child_pid, &stat_loc, WUNTRACED);
             }
