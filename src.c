@@ -12,6 +12,7 @@
 #define MAX_INPUT_SIZE 1024
 #define MAX_TOKENS 128
 #define MAX_JOBS 128
+#define MAX_PIPES 64
 
 typedef struct {
     int job_id;
@@ -65,9 +66,9 @@ void check_background_jobs() {
     }
 }
 
-void delete_up_to_null(char *arr[], int size)
+void delete_up_to_null(char **arr, int size)
 {
-    int null_pos;
+    int null_pos = 0;
 
     // Find the null position of a null terminator
     while (null_pos < size && arr[null_pos] != NULL)
@@ -77,13 +78,13 @@ void delete_up_to_null(char *arr[], int size)
 
     // Shift elements after the null terminator to beginning
     int shift_pos = null_pos+1;
-    for (int i=0; shift_pos < size; i++, shift_pos++)
+    for (int i=0; shift_pos < MAX_TOKENS; i++, shift_pos++)
     {
         arr[i] = arr[shift_pos];
     }
 
     // Null-terminate the array at new end
-    arr[size - null_pos - 1] = NULL;
+    // arr[size - null_pos - 1] = NULL;
 }
 
 // Function to parse the input command into tokens
@@ -249,10 +250,10 @@ int main(int argc, char **argv) {
         }
 
         // Check for pipes
-        int pipe_present = 0;
-        int pipe_indexes[token_count];
-        int pipe_count = 0;
-
+        int pipe_present = 0; // If there is a pipe, to go into the pipe branch
+        int pipe_indexes[token_count]; // All the indexes of the pipes, so we can set those indexes to NULL
+        int pipe_count = 0; // How many pipes there are, for ease of looping
+        int pipes_fds[MAX_PIPES][2]; // The max number of pipes possible.
         // Initalize pipe_indexes to all 0's
         for (int i=0; i<token_count; i++)
         {
@@ -264,94 +265,80 @@ int main(int argc, char **argv) {
             if (strcmp(tokens[i], "|") == 0) {
                 pipe_present = 1;
                 pipe_indexes[i] = i;
+                tokens[i] = NULL;
                 pipe_count++;
             }
         }
 
-        if (pipe_present) {
-            int in_fd = STDIN_FILENO;
+        // Create all the pipes
+        for (int i=0; i<pipe_count; i++)
+        {
+            if(pipe(pipes_fds[i]) == -1)
+            {
+                perror("problem creating one of the pipes");
+                exit(EXIT_FAILURE);
+            }
+        }
 
+
+        // Deal with the pipes 
+        if (pipe_present) 
+        {
             for (int i=0; i<pipe_count; i++)
             {
-                int fd[2];
-                if (pipe(fd) == -1)
+                if (pipe(pipes_fds[i]) == -1)
                 {
-                    perror("pipe error");
-                    continue;
+                    perror("problem creating one of the pipes");
+                    exit(EXIT_FAILURE);
+                }
+                
+                pid_t pid = fork();
+
+                if (pid == -1)
+                {
+                    perror("Pipe");
+                    exit(EXIT_FAILURE);
+                }
+                else if (pid == 0)
+                {
+                    
+                }
+
+
+
+                int current_command_index = 0;
+                char* current_command[MAX_TOKENS];
+                while (tokens[current_command_index] != NULL)
+                {
+                    current_command[current_command_index] = tokens[current_command_index];
+                    current_command_index++;
+                }
+                current_command[current_command_index+1] = NULL;
+                delete_up_to_null(tokens, sizeof(tokens));
+                if (pid == -1)
+                {
+                    perror("Pipe");
+                }
+                else if (pid == 0)
+                {
+                    if (execvp(current_command[0], current_command) == -1)
+                    {
+                        perror("execvp error");
+                        exit(EXIT_FAILURE);
+                    } 
+                }
+                else if (pid >= 0)
+                {
+                    for (int i=0; i<pipe_count; i++)
+                    {
+                        close(pipes_fds[i][0]);
+                        close(pipes_fds[i][1]);
+                    }
                 }
             }
-
-
-            // // Set all the pipe indexes to NULL for execvp
-            // for (int i=0; i<token_count; i++) 
-            // {
-            //     if (pipe_indexes[i] == 1)
-            //     {
-            //         tokens[i] = NULL;
-            //     }
-            // }
-
-            // if (pid == 0)
-            // {
-            //     // Set up redirection
-            // }
-
-
-
-            // for (int i=0; i <= pipe_count; i++) // Main loop for all piped functions
-            // {
-            //     int fd[2];
-            //     if (pipe(fd) == -1)
-            //     {
-            //         perror("pipe error");
-            //         continue;
-            //     }
-
-            //     pid_t pid = fork();
-            //     if (pid < 0)
-            //     {
-            //         perror("fork");
-            //         exit(EXIT_FAILURE);
-            //     }
-
-            //     if (pid == 0) // Child Processes
-            //     {
-            //         if (in_fd != STDIN_FILENO)
-            //         {
-            //             close(in_fd);
-            //         }
-            //     }
-            //     if (i <= pipe_count-1) // Not the last command
-            //     {
-            //         dup2(fd[1], STDOUT_FILENO);
-            //         close(fd[0]);
-            //         close(fd[1]);
-            //     }
-
-            //     // Execute the commands
-            //     char *current_command[MAX_TOKENS];
-            //     int index = 0;
-            //     do 
-            //     {
-            //         current_command[index] = tokens[index];
-            //         index++;
-            //     }
-            //     while (tokens[index] != NULL);
-
-            //     delete_up_to_null(tokens, sizeof(tokens));
-
-            //     if (execvp(current_command[0], current_command) < 0)
-            //     {
-            //         perror(tokens[0]);
-            //         exit(EXIT_FAILURE);
-            //     }
-
-            // }
-
-           
-
-
-        } else {
+            
+        } 
+        else {
             // No pipe
             // Fork a child process
             pid_t pid = fork();
